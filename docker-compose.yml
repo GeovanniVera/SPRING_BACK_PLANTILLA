@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: backend-app
+    ports:
+      - "8080:8080" # Maps local 8080 (from properties) to container 8080 (exposed in Dockerfile)
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/backend_test?useSSL=false&serverTimezone=UTC&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - APP_JWT_SECRET=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    depends_on:
+      - db
+    networks:
+      - backend-network
+
+  db:
+    image: mysql:8.0
+    container_name: backend-db
+    ports:
+      - "3307:3306" # Maps host 3307 to container 3306 (avoid conflict if local mysql is running)
+    environment:
+      - MYSQL_DATABASE=backend_test
+      - MYSQL_ROOT_PASSWORD=root
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - backend-network
+    command: --default-authentication-plugin=mysql_native_password
+
+networks:
+  backend-network:
+    driver: bridge
+
+volumes:
+  db-data:
