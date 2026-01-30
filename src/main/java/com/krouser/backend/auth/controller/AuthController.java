@@ -10,22 +10,33 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.ui.Model;
+import org.springframework.beans.factory.annotation.Value;
+
+@Controller
 @RequestMapping("/api/auth")
 public class AuthController {
 
     private final AuthService authService;
+
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
 
     public AuthController(AuthService authService) {
         this.authService = authService;
     }
 
     @PostMapping("/login")
+    @ResponseBody
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest) {
         LoginResponse response = authService.login(request);
@@ -33,11 +44,26 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @ResponseBody
     public ResponseEntity<ApiResponse<RegisterResponse>> register(@Valid @RequestBody RegisterRequest request,
             HttpServletRequest httpRequest) {
         RegisterResponse response = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(HttpStatus.CREATED.value(), "User registered successfully", response,
                         httpRequest.getRequestURI()));
+    }
+
+    @GetMapping("/verify")
+    public String verifyAccount(
+            @RequestParam String token,
+            Model model) {
+        try {
+            authService.verifyAccount(token);
+            model.addAttribute("frontendUrl", frontendUrl);
+            return "auth/verify-success";
+        } catch (Exception e) {
+            model.addAttribute("error", e.getMessage());
+            return "auth/verify-error";
+        }
     }
 }

@@ -49,9 +49,11 @@ public class RbacBootstrapService implements CommandLineRunner {
         Role userRole = createRoleIfNotFound("USER", userPrivileges);
 
         // 3. Create Users
-        createUserIfNotFound("admin", "admin123", Collections.singletonList(adminRole), "Admin", "System", "Admin",
+        createUserIfNotFound("admin@gmail.com", "admin123", Collections.singletonList(adminRole), "Admin", "System",
+                "Admin",
                 "User");
-        createUserIfNotFound("user", "user123", Collections.singletonList(userRole), "User", "Normal", "User", "Test");
+        createUserIfNotFound("user@gmail.com", "user123", Collections.singletonList(userRole), "User", "Normal", "User",
+                "Test");
     }
 
     private Privilege createPrivilegeIfNotFound(String name) {

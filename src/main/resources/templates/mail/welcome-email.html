@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{mail/layout :: layout(~{::content})}">
+
+<body>
+    <div th:fragment="content">
+        <h1>¡Bienvenido, <span th:text="${username}">Usuario</span>!</h1>
+        <p>Gracias por registrarte. Para activar tu cuenta, haz clic en el siguiente botón:</p>
+        <a th:href="${activationLink}"
+            style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            Verificar Cuenta
+        </a>
+        <p>O copia y pega este enlace: <br /> <span th:text="${activationLink}"></span></p>
+    </div>
+</body>
+
+</html>

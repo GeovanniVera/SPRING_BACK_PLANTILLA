@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{mail/layout :: layout(~{::content})}">
+
+<body>
+    <div th:fragment="content">
+        <h2 style="color: #c0392b;">Error de Verificación</h2>
+        <p th:text="${error}">El token es inválido o ha expirado.</p>
+        <p>Por favor, solicita un nuevo correo de verificación o contacta a soporte.</p>
+    </div>
+</body>
+
+</html>

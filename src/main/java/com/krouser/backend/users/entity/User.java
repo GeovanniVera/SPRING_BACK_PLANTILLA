@@ -23,7 +23,7 @@ public class User {
     @Column(nullable = false)
     private String passwordHash;
 
-    private boolean enabled = true;
+    private boolean enabled = false;
 
     @Column(nullable = false)
     private String alias;

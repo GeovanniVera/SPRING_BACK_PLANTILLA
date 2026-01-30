@@ -160,3 +160,55 @@ docker-compose down
 ```
 
 > **Nota sobre variables de entorno**: El archivo `docker-compose.yaml` ya contiene las variables de entorno necesarias para que el Backend se comunique con la base de datos dentro de la red de Docker. No necesitas modificar el `application.properties` local para la ejecución con Docker.
+
+## Módulo de Email (Opcional)
+
+Este proyecto incluye un sistema de mensajería desacoplado. Puedes elegir entre enviar correos reales o simplemente verlos en la consola de logs.
+
+### 1. Activación y Desactivación
+
+El módulo se controla mediante la propiedad `app.email.enabled`.
+
+*   `false` (**Default**): Utiliza un `MockEmailService`. Los correos no se envían, solo se registran en el log de la aplicación.
+*   `true`: Utiliza `SmtpEmailService` para envíos reales vía protocolo SMTP.
+
+### 2. Configuración vía Docker / Environment
+
+Para envíos reales, configura las siguientes variables en tu archivo `.env` o `docker-compose.yaml`:
+
+| Variable | Descripción | Ejemplo (Gmail) |
+| :--- | :--- | :--- |
+| `APP_EMAIL_ENABLED` | Activa el servicio real | `true` |
+| `SPRING_MAIL_HOST` | Servidor SMTP | `smtp.gmail.com` |
+| `SPRING_MAIL_PORT` | Puerto SMTP | `587` |
+| `SPRING_MAIL_USERNAME` | Tu correo | `tu-app@gmail.com` |
+| `SPRING_MAIL_PASSWORD` | Contraseña de aplicación | `abcd-efgh-ijkl-mnop` |
+
+### 3. Personalización de Plantillas
+
+Las plantillas están ubicadas en `src/main/resources/templates/mail/`.
+
+*   `layout.html`: Cambia aquí el logo y el pie de página global.
+*   `welcome-email.html`: Plantilla de ejemplo para nuevos registros.
+
+## Pruebas de Email con MailHog
+
+Al utilizar el entorno de Docker (`docker-compose up`), el sistema intercepta automáticamente todos los correos salientes y los redirige al servicio **MailHog**, evitando envíos reales a destinatarios durante el desarrollo.
+
+### 📧 Ver correos interceptados
+
+Para visualizar los correos enviados por el sistema, accede desde tu navegador a:
+
+👉 **[http://localhost:8025](http://localhost:8025)**
+
+Aquí podrás ver la bandeja de entrada simulada, inspeccionar el contenido HTML de los correos y verificar que las plantillas se renderizan correctamente.
+
+### ⚡ Prueba Rápida
+
+Ejecuta el siguiente comando para generar un correo de prueba instantáneamente:
+
+```bash
+curl -X POST "http://localhost:8080/api/test/send-verification?email=tu@email.com"
+```
+
+Deberías ver una respuesta JSON confirmando el envío y, si estás usanto Docker, el correo aparecerá en MailHog.

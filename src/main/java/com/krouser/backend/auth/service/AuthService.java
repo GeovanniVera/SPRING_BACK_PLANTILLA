@@ -37,10 +37,14 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final TagGenerator tagGenerator;
     private final AuditService auditService;
+    private final com.krouser.backend.email.service.EmailService emailService;
+    private final com.krouser.backend.auth.repository.VerificationTokenRepository tokenRepository;
 
     public AuthService(AuthenticationManager authenticationManager, UserDetailsService userDetailsService,
             JwtService jwtService, UserRepository userRepository, RoleRepository roleRepository,
-            PasswordEncoder passwordEncoder, TagGenerator tagGenerator, AuditService auditService) {
+            PasswordEncoder passwordEncoder, TagGenerator tagGenerator, AuditService auditService,
+            com.krouser.backend.email.service.EmailService emailService,
+            com.krouser.backend.auth.repository.VerificationTokenRepository tokenRepository) {
         this.authenticationManager = authenticationManager;
         this.userDetailsService = userDetailsService;
         this.jwtService = jwtService;
@@ -49,6 +53,29 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.tagGenerator = tagGenerator;
         this.auditService = auditService;
+        this.emailService = emailService;
+        this.tokenRepository = tokenRepository;
+    }
+
+    /*
+     * Account Verification
+     */
+    public void verifyAccount(String token) {
+        com.krouser.backend.auth.entity.VerificationToken verificationToken = tokenRepository.findByToken(token)
+                .orElseThrow(() -> new RuntimeException("Invalid token"));
+
+        if (verificationToken.isExpired()) {
+            throw new RuntimeException("Token expired");
+        }
+
+        User user = verificationToken.getUser();
+        user.setEnabled(true);
+        userRepository.save(user);
+
+        tokenRepository.delete(verificationToken);
+
+        auditService.audit("AUTH_VERIFY_SUCCESS", "AUTH", AuditEvent.AuditOutcome.SUCCESS,
+                user.getIdPublic().toString(), user.getUsername(), "VerificationToken", null, null);
     }
 
     public LoginResponse login(LoginRequest request) {
@@ -100,7 +127,8 @@ public class AuthService {
         user.setUsername(request.getUsername());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRoles(Collections.singleton(userRole));
-        user.setEnabled(true);
+        user.setRoles(Collections.singleton(userRole));
+        user.setEnabled(false); // Disabled until verification
 
         // Profile fields
         user.setAlias(request.getAlias());
@@ -145,14 +173,32 @@ public class AuthService {
                 new AuditDetailsBuilder()
                         .add("alias", savedUser.getAlias())
                         .add("tag", savedUser.getTag())
+                        .add("alias", savedUser.getAlias())
+                        .add("tag", savedUser.getTag())
                         .build());
+
+        sendVerificationEmail(savedUser);
 
         return new RegisterResponse(
                 savedUser.getIdPublic(),
                 savedUser.getUsername(),
                 savedUser.getAlias(),
                 savedUser.getTag(),
-                "User registered successfully",
+                "Usuario registrado exitosamente. Por favor, verifica tu correo electrónica.",
                 savedUser.getRoles().stream().map(Role::getName).collect(Collectors.toSet()));
+    }
+
+    private void sendVerificationEmail(User user) {
+        com.krouser.backend.auth.entity.VerificationToken token = new com.krouser.backend.auth.entity.VerificationToken(
+                user);
+        tokenRepository.save(token);
+
+        String verificationLink = "http://localhost:8080/api/auth/verify?token=" + token.getToken();
+
+        java.util.Map<String, Object> variables = new java.util.HashMap<>();
+        variables.put("username", user.getAlias());
+        variables.put("activationLink", verificationLink);
+
+        emailService.sendEmail(user.getUsername(), "Verifica tu cuenta", "welcome-email", variables);
     }
 }
