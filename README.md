@@ -13,7 +13,7 @@ El objetivo principal de este sistema es resolver la problemática de la **admin
 
 La arquitectura sigue los principios de **separación de responsabilidades**, organizando el código en módulos de dominio (Auth, Users, RBAC) para facilitar el mantenimiento y la escalabilidad.
 
-## 🛠 Stack Tecnológico
+## Stack Tecnológico
 
 El sistema ha sido construido utilizando las siguientes tecnologías y herramientas:
 
@@ -23,6 +23,26 @@ El sistema ha sido construido utilizando las siguientes tecnologías y herramien
 *   **Base de Datos**: MySQL (con Spring Data JPA)
 *   **Gestión de Dependencias**: Maven
 *   **Validación**: Hibernate Validator (Bean Validation)
+
+## 🛡️ Módulo de Auditoría
+
+El sistema incorpora un módulo transversal de auditoría diseñado para garantizar la trazabilidad y la seguridad de las operaciones.
+
+### Funcionalidades
+1.  **Rastreo de Peticiones (`X-Request-Id`)**:
+    *   Intercepta todas las peticiones HTTP.
+    *   Si no existe, genera un ID único (UUID) y lo asocia al hilo de ejecución.
+    *   Este ID permite correlacionar logs y eventos a través de todas las capas de la aplicación.
+
+2.  **Registro de Eventos**:
+    Se almacenan eventos críticos (Login, Fallos de Auth, Creación de usuarios, etc.) en la base de datos con la siguiente información:
+    *   **Actor**: Quién realizó la acción.
+    *   **Contexto**: Dirección IP, User-Agent, Método HTTP.
+    *   **Resultado**: Éxito o Fallo (`SUCCESS` / `FAIL`).
+    *   **Detalles**: JSON flexible con información específica del evento.
+
+3.  **Integración con Seguridad**:
+    *   Captura automáticamente intentos de acceso no autorizado (`401 Unauthorized`) y denegaciones de acceso (`403 Forbidden`).
 
 ## Referencia de la API
 
