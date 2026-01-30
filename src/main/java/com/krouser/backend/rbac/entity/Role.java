@@ -22,7 +22,9 @@ public class Role {
     private boolean active = true;
 
     @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(name = "roles_privileges", joinColumns = @JoinColumn(name = "role_id", referencedColumnName = "id"), inverseJoinColumns = @JoinColumn(name = "privilege_id", referencedColumnName = "id"))
+    @JoinTable(name = "roles_privileges", joinColumns = @JoinColumn(name = "role_id", referencedColumnName = "id"), inverseJoinColumns = @JoinColumn(name = "privilege_id", referencedColumnName = "id"), indexes = {
+            @Index(name = "idx_roles_privileges_role", columnList = "role_id"),
+            @Index(name = "idx_roles_privileges_privilege", columnList = "privilege_id") })
     private Collection<Privilege> privileges = new HashSet<>();
 
     public Role() {

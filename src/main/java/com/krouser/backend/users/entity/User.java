@@ -23,7 +23,23 @@ public class User {
     @Column(nullable = false)
     private String passwordHash;
 
-    private boolean enabled = false;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UserStatus status = UserStatus.PENDING_VERIFICATION;
+
+    @Column(name = "failed_attempts", nullable = false)
+    private int failedAttempts = 0;
+
+    @Column(name = "lock_until")
+    private java.time.LocalDateTime lockUntil;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private java.time.LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = java.time.LocalDateTime.now();
+    }
 
     @Column(nullable = false)
     private String alias;
@@ -43,7 +59,9 @@ public class User {
     private String apellidoMaterno;
 
     @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(name = "users_roles", joinColumns = @JoinColumn(name = "user_id", referencedColumnName = "id"), inverseJoinColumns = @JoinColumn(name = "role_id", referencedColumnName = "id"))
+    @JoinTable(name = "users_roles", joinColumns = @JoinColumn(name = "user_id", referencedColumnName = "id"), inverseJoinColumns = @JoinColumn(name = "role_id", referencedColumnName = "id"), indexes = {
+            @Index(name = "idx_users_roles_user", columnList = "user_id"),
+            @Index(name = "idx_users_roles_role", columnList = "role_id") })
     private Collection<Role> roles = new HashSet<>();
 
     public User() {
@@ -88,11 +106,39 @@ public class User {
     }
 
     public boolean isEnabled() {
-        return enabled;
+        return this.status == UserStatus.ACTIVE;
     }
 
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
+    public UserStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(UserStatus status) {
+        this.status = status;
+    }
+
+    public int getFailedAttempts() {
+        return failedAttempts;
+    }
+
+    public void setFailedAttempts(int failedAttempts) {
+        this.failedAttempts = failedAttempts;
+    }
+
+    public java.time.LocalDateTime getLockUntil() {
+        return lockUntil;
+    }
+
+    public void setLockUntil(java.time.LocalDateTime lockUntil) {
+        this.lockUntil = lockUntil;
+    }
+
+    public java.time.LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(java.time.LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 
     public Collection<Role> getRoles() {

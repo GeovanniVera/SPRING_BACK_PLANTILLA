@@ -68,7 +68,8 @@ public class UserService {
         user.setUsername(request.getUsername());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRoles(roles);
-        user.setEnabled(true);
+        user.setRoles(roles);
+        user.setStatus(com.krouser.backend.users.entity.UserStatus.ACTIVE);
 
         // Profile
         user.setAlias(request.getAlias());
@@ -159,10 +160,11 @@ public class UserService {
     public void changeUserStatus(UUID idPublic, boolean enabled) {
         User user = userRepository.findByIdPublic(idPublic)
                 .orElseThrow(() -> new ResourceNotFoundException("User", idPublic.toString()));
-        user.setEnabled(enabled);
+        user.setStatus(enabled ? com.krouser.backend.users.entity.UserStatus.ACTIVE
+                : com.krouser.backend.users.entity.UserStatus.BLOCKED);
         userRepository.save(user);
 
-        auditService.audit(enabled ? "USER_ENABLED" : "USER_DISABLED", "USER", AuditEvent.AuditOutcome.SUCCESS,
+        auditService.audit(enabled ? "USER_UNBLOCKED" : "USER_BLOCKED", "USER", AuditEvent.AuditOutcome.SUCCESS,
                 getCurrentUsername(), getCurrentUsername(),
                 "User", user.getIdPublic().toString(), null);
     }

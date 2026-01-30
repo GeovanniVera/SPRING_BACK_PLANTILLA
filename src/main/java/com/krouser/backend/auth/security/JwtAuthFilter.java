@@ -55,10 +55,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType(org.springframework.http.MediaType.APPLICATION_JSON_VALUE);
+            new com.fasterxml.jackson.databind.ObjectMapper().writeValue(response.getOutputStream(),
+                    java.util.Map.of(
+                            "status", 401,
+                            "error", "Unauthorized",
+                            "message", e.getMessage(),
+                            "path", request.getServletPath()));
+            return; // Stop filter chain
         } catch (Exception e) {
-            // Token invalid or expired, just continue filter chain,
-            // security config will handle 403/401 if authentication is missing for
-            // protected endpoints
+            // Other errors, continue or log
+            logger.error("Cannot set user authentication: {}", e);
         }
 
         filterChain.doFilter(request, response);

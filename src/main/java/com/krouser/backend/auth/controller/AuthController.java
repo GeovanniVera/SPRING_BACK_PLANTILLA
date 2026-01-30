@@ -4,6 +4,8 @@ import com.krouser.backend.auth.dto.LoginRequest;
 import com.krouser.backend.auth.dto.LoginResponse;
 import com.krouser.backend.auth.dto.RegisterRequest;
 import com.krouser.backend.auth.dto.RegisterResponse;
+import com.krouser.backend.auth.dto.TokenRefreshRequest;
+import com.krouser.backend.auth.dto.TokenRefreshResponse;
 import com.krouser.backend.auth.service.AuthService;
 import com.krouser.backend.shared.dto.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,7 +17,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -65,5 +66,31 @@ public class AuthController {
             model.addAttribute("error", e.getMessage());
             return "auth/verify-error";
         }
+    }
+
+    @PostMapping("/resend-verification")
+    @ResponseBody
+    public ResponseEntity<ApiResponse<Void>> resendVerification(@RequestParam String email,
+            HttpServletRequest httpRequest) {
+        authService.resendVerificationToken(email);
+        return ResponseEntity.ok(
+                new ApiResponse<>(200, "Verification email resent successfully", null, httpRequest.getRequestURI()));
+    }
+
+    @PostMapping("/refresh")
+    @ResponseBody
+    public ResponseEntity<ApiResponse<TokenRefreshResponse>> refreshToken(
+            @Valid @RequestBody TokenRefreshRequest request, HttpServletRequest httpRequest) {
+        TokenRefreshResponse response = authService.refreshToken(request);
+        return ResponseEntity
+                .ok(new ApiResponse<>(200, "Token refreshed successfully", response, httpRequest.getRequestURI()));
+    }
+
+    @PostMapping("/logout")
+    @ResponseBody
+    public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest httpRequest) {
+        String username = httpRequest.getUserPrincipal().getName();
+        authService.logout(username);
+        return ResponseEntity.ok(new ApiResponse<>(200, "Log out successful", null, httpRequest.getRequestURI()));
     }
 }

@@ -39,12 +39,14 @@ public class AuthService {
     private final AuditService auditService;
     private final com.krouser.backend.email.service.EmailService emailService;
     private final com.krouser.backend.auth.repository.VerificationTokenRepository tokenRepository;
+    private final RefreshTokenService refreshTokenService;
 
     public AuthService(AuthenticationManager authenticationManager, UserDetailsService userDetailsService,
             JwtService jwtService, UserRepository userRepository, RoleRepository roleRepository,
             PasswordEncoder passwordEncoder, TagGenerator tagGenerator, AuditService auditService,
             com.krouser.backend.email.service.EmailService emailService,
-            com.krouser.backend.auth.repository.VerificationTokenRepository tokenRepository) {
+            com.krouser.backend.auth.repository.VerificationTokenRepository tokenRepository,
+            RefreshTokenService refreshTokenService) {
         this.authenticationManager = authenticationManager;
         this.userDetailsService = userDetailsService;
         this.jwtService = jwtService;
@@ -55,6 +57,7 @@ public class AuthService {
         this.auditService = auditService;
         this.emailService = emailService;
         this.tokenRepository = tokenRepository;
+        this.refreshTokenService = refreshTokenService;
     }
 
     /*
@@ -69,7 +72,7 @@ public class AuthService {
         }
 
         User user = verificationToken.getUser();
-        user.setEnabled(true);
+        user.setStatus(com.krouser.backend.users.entity.UserStatus.ACTIVE);
         userRepository.save(user);
 
         tokenRepository.delete(verificationToken);
@@ -79,18 +82,40 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request) {
+        // 1. Check User Existence & Locking
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.getStatus() == com.krouser.backend.users.entity.UserStatus.BLOCKED) {
+            if (user.getLockUntil() != null && user.getLockUntil().isAfter(java.time.LocalDateTime.now())) {
+                auditService.audit("AUTH_LOGIN_LOCKED", "AUTH", AuditEvent.AuditOutcome.FAIL,
+                        user.getIdPublic().toString(), request.getUsername(), "User", null,
+                        new AuditDetailsBuilder().add("lockUntil", user.getLockUntil().toString()).build());
+                throw new RuntimeException("Account is locked until " + user.getLockUntil());
+            } else {
+                // Unlock if time passed
+                user.setStatus(com.krouser.backend.users.entity.UserStatus.ACTIVE);
+                user.setFailedAttempts(0);
+                user.setLockUntil(null);
+                userRepository.save(user);
+            }
+        }
+
         try {
+            // 2. Attempt Authentication
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
                             request.getUsername(),
                             request.getPassword()));
 
+            // 3. Success -> Reset counters
+            if (user.getFailedAttempts() > 0) {
+                user.setFailedAttempts(0);
+                userRepository.save(user);
+            }
+
             UserDetails userDetails = userDetailsService.loadUserByUsername(request.getUsername());
             String jwtToken = jwtService.generateToken(userDetails);
-
-            // Get the full user entity to access roles and profile information
-            User user = userRepository.findByUsername(request.getUsername())
-                    .orElseThrow(() -> new RuntimeException("User not found"));
 
             // Extract role names
             Set<String> roleNames = user.getRoles().stream()
@@ -100,22 +125,45 @@ public class AuthService {
             auditService.audit("AUTH_LOGIN_SUCCESS", "AUTH", AuditEvent.AuditOutcome.SUCCESS,
                     user.getIdPublic().toString(), request.getUsername(), "User", null, null);
 
+            com.krouser.backend.auth.entity.RefreshToken refreshToken = refreshTokenService
+                    .createRefreshToken(user.getId());
+
             return new LoginResponse(
                     jwtToken,
+                    refreshToken.getToken(),
                     user.getIdPublic(),
                     user.getUsername(),
                     user.getAlias(),
                     user.getTag(),
                     roleNames);
-        } catch (Exception e) {
+
+        } catch (org.springframework.security.core.AuthenticationException e) {
+            // 4. Failure -> Increment counters
+            user.setFailedAttempts(user.getFailedAttempts() + 1);
+
+            if (user.getFailedAttempts() >= 5) {
+                user.setStatus(com.krouser.backend.users.entity.UserStatus.BLOCKED);
+                user.setLockUntil(java.time.LocalDateTime.now().plusMinutes(15));
+                auditService.audit("ACCOUNT_LOCKED", "AUTH", AuditEvent.AuditOutcome.FAIL,
+                        user.getIdPublic().toString(), request.getUsername(), "User", null,
+                        new AuditDetailsBuilder().add("reason", "Too many failed attempts").build());
+            }
+
+            userRepository.save(user);
+
             auditService.audit("AUTH_LOGIN_FAIL", "AUTH", AuditEvent.AuditOutcome.FAIL,
-                    null, request.getUsername(), "User", null,
-                    new AuditDetailsBuilder().add("reason", e.getMessage()).build());
+                    user.getIdPublic() != null ? user.getIdPublic().toString() : null,
+                    request.getUsername(), "User", null,
+                    new AuditDetailsBuilder().add("reason", e.getMessage())
+                            .add("attempts", String.valueOf(user.getFailedAttempts())).build());
+
             throw e;
         }
     }
 
     public RegisterResponse register(RegisterRequest request) {
+        validatePassword(request.getPassword());
+
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new RuntimeException("Username already exists");
         }
@@ -128,7 +176,8 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRoles(Collections.singleton(userRole));
         user.setRoles(Collections.singleton(userRole));
-        user.setEnabled(false); // Disabled until verification
+        user.setRoles(Collections.singleton(userRole));
+        user.setStatus(com.krouser.backend.users.entity.UserStatus.PENDING_VERIFICATION);
 
         // Profile fields
         user.setAlias(request.getAlias());
@@ -200,5 +249,76 @@ public class AuthService {
         variables.put("activationLink", verificationLink);
 
         emailService.sendEmail(user.getUsername(), "Verifica tu cuenta", "welcome-email", variables);
+    }
+
+    public com.krouser.backend.auth.dto.TokenRefreshResponse refreshToken(
+            com.krouser.backend.auth.dto.TokenRefreshRequest request) {
+        String requestRefreshToken = request.getRefreshToken();
+
+        return refreshTokenService.findByToken(requestRefreshToken)
+                .map(refreshTokenService::verifyExpiration)
+                .map(token -> {
+                    // Rotate Token
+                    com.krouser.backend.auth.entity.RefreshToken newToken = refreshTokenService
+                            .rotateRefreshToken(token);
+
+                    User user = token.getUser();
+                    String jwtToken = jwtService
+                            .generateToken(userDetailsService.loadUserByUsername(user.getUsername()));
+
+                    return new com.krouser.backend.auth.dto.TokenRefreshResponse(jwtToken, newToken.getToken());
+                })
+                .orElseThrow(() -> new RuntimeException("Refresh token is not in database!"));
+    }
+
+    public void logout(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        refreshTokenService.deleteByUserId(user.getId());
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public void resendVerificationToken(String email) {
+        User user = userRepository.findByUsername(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.getStatus() != com.krouser.backend.users.entity.UserStatus.PENDING_VERIFICATION) {
+            throw new RuntimeException("Account is already verified or blocked.");
+        }
+
+        // Delete existing token if any
+        tokenRepository.deleteByUser(user);
+
+        // Create new token
+        com.krouser.backend.auth.entity.VerificationToken newToken = new com.krouser.backend.auth.entity.VerificationToken(
+                user);
+        tokenRepository.save(newToken);
+
+        // Send email
+        java.util.Map<String, Object> variables = new java.util.HashMap<>();
+        variables.put("name", user.getAlias());
+        variables.put("verificationLink",
+                org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath()
+                        .path("/api/auth/verify").queryParam("token", newToken.getToken()).toUriString());
+
+        emailService.sendEmail(user.getUsername(), "Resend Verification", "welcome-email", variables);
+    }
+
+    private void validatePassword(String password) {
+        if (password == null || password.length() < 12) {
+            throw new RuntimeException("La contraseña debe tener al menos 12 caracteres.");
+        }
+        if (!password.matches(".*[A-Z].*")) {
+            throw new RuntimeException("La contraseña debe contener al menos una letra mayúscula.");
+        }
+        if (!password.matches(".*[a-z].*")) {
+            throw new RuntimeException("La contraseña debe contener al menos una letra minúscula.");
+        }
+        if (!password.matches(".*\\d.*")) {
+            throw new RuntimeException("La contraseña debe contener al menos un número.");
+        }
+        if (!password.matches(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?].*")) {
+            throw new RuntimeException("La contraseña debe contener al menos un carácter especial.");
+        }
     }
 }

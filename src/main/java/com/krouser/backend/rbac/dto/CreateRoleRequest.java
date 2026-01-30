@@ -16,7 +16,7 @@ public class CreateRoleRequest {
     }
 
     public void setName(String name) {
-        this.name = name;
+        this.name = name != null ? name.trim().toUpperCase() : null;
     }
 
     public String getDescription() {

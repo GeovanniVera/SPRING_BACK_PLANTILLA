@@ -12,13 +12,25 @@ public class LoginResponse {
     private String tag;
     private Set<String> roles;
 
-    public LoginResponse(String token, UUID idPublic, String username, String alias, String tag, Set<String> roles) {
+    private String refreshToken;
+
+    public LoginResponse(String token, String refreshToken, UUID idPublic, String username, String alias, String tag,
+            Set<String> roles) {
         this.token = token;
+        this.refreshToken = refreshToken;
         this.idPublic = idPublic;
         this.username = username;
         this.alias = alias;
         this.tag = tag;
         this.roles = roles;
+    }
+
+    public String getRefreshToken() {
+        return refreshToken;
+    }
+
+    public void setRefreshToken(String refreshToken) {
+        this.refreshToken = refreshToken;
     }
 
     public String getToken() {

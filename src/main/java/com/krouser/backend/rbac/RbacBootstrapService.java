@@ -77,7 +77,8 @@ public class RbacBootstrapService implements CommandLineRunner {
             user.setUsername(username);
             user.setPasswordHash(passwordEncoder.encode(password));
             user.setRoles(roles);
-            user.setEnabled(true);
+            user.setRoles(roles);
+            user.setStatus(com.krouser.backend.users.entity.UserStatus.ACTIVE);
 
             // Profile
             user.setAlias(alias);

@@ -7,6 +7,7 @@ import java.util.List;
 public class CreateUserRequest {
     @NotBlank(message = "Username is required")
     @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    @jakarta.validation.constraints.Email(message = "Username must be a valid email")
     private String username;
 
     @NotBlank(message = "Password is required")
@@ -34,7 +35,7 @@ public class CreateUserRequest {
     }
 
     public void setUsername(String username) {
-        this.username = username;
+        this.username = username != null ? username.trim().toLowerCase() : null;
     }
 
     public String getPassword() {
