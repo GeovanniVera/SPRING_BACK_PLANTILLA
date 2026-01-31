@@ -62,10 +62,38 @@ Para mitigar ataques de fuerza bruta, el sistema monitorea intentos de login fal
 *   **Duración**: El bloqueo dura **15 minutos**.
 *   **Desbloqueo**: Automático tras expirar el tiempo, o manual por un administrador.
 
-### Flujo de Activación y Reenvío
-1.  **Registro**: Se crea el usuario en `PENDING_VERIFICATION` y se envía un correo con un token.
-2.  **Verificación**: Al hacer clic en el enlace (`/verify`), el usuario pasa a `ACTIVE`.
-3.  **Reenvío de Token**: Si el correo se pierde o el token expira, se puede solicitar uno nuevo mediante el endpoint de reenvío.
+## 🌐 Arquitectura Multicliente
+
+El sistema soporta múltiples plataformas cliente (Web y Móvil) mediante una arquitectura de redirección dinámica basada en el origen del usuario.
+
+### Detección de Origen
+*   Se utiliza el parámetro o campo `clientType` en los endpoints de registro y recuperación.
+*   Valores soportados: `web` (default), `mobile`.
+
+### Redirección Dinámica
+Las URLs de destino para cada cliente se configuran centralizadamente. Dependiendo del `clientType`, el sistema redirige al usuario a:
+*   **Web**: Esquema HTTP estándar (ej. `https://mi-web.com/login`).
+*   **Móvil**: Deep Links o Custom Schemes (ej. `mi-app://login`).
+
+## 🛡️ Flujos de Comunicación
+
+### Flujo de Activación
+1.  **Registro**: Usuario se registra enviando `clientType` (o usa default "web").
+2.  **Correo**: Recibe enlace único (`/api/auth/verify?token=...`).
+3.  **Validación**: Al hacer clic, el backend valida el token.
+4.  **Redirección**:
+    *   Si es éxito: Muestra pantalla HTML con botón "Ir al Login".
+    *   **Comportamiento Dinámico**: El botón llevará a la URL Web o al Deep Link Móvil según el `clientType` original.
+
+### Flujo de Recuperación
+1.  **Solicitud**: Usuario pide resetear contraseña enviando email y `clientType`.
+2.  **Correo**: Recibe enlace directo.
+    *   **Web**: `${app.urls.web.reset}?token=...`
+    *   **Móvil**: `${app.urls.mobile.reset}?token=...`
+3.  **Reset**: El frontend correspondiente captura el token y llama a la API para cambiar el password.
+
+### Flujo de Reenvío
+Si el correo se pierde o el token expira, se puede solicitar uno nuevo mediante el endpoint de reenvío.
 
 ## 🧹 Mantenimiento y Robustez de Datos
 
@@ -127,11 +155,13 @@ Endpoints principales del sistema de Autenticación. **Base URL**: `/api/auth`
 | Método | Endpoint | Descripción | Entrada / Salida |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/login` | Inicia sesión. Retorna Access (30m) y Refresh Token (7d). | **In**: `LoginRequest`<br>**Out**: `ApiResponse<LoginResponse>` |
-| `POST` | `/register` | Registra usuario (Estado: PENDING). | **In**: `RegisterRequest`<br>**Out**: `ApiResponse<RegisterResponse>` |
+| `POST` | `/register` | Registra usuario (Estado: PENDING). | **In**: `RegisterRequest` (+clientType)<br>**Out**: `ApiResponse` |
 | `POST` | `/refresh` | Obtiene nuevo Access Token usando Refresh Token. | **In**: `TokenRefreshRequest`<br>**Out**: `TokenRefreshResponse` |
 | `POST` | `/logout` | Invalida la sesión (Borra Refresh Token). | *N/A* (Requiere Auth)<br>**Out**: `200 OK` |
 | `POST` | `/resend-verification` | Reenvía correo de activación. | **Query**: `?email=...`<br>**Out**: `ApiResponse` |
-| `GET` | `/verify` | Valida token (Endpoint Visual). | **Query**: `?token=...`<br>**Out**: Vista HTML |
+| `GET` | `/verify` | Valida token (Endpoint Visual). | **Query**: `?token=...`<br>**Out**: Vista HTML (Redirige según clientType) |
+| `POST` | `/forgot-password` | Inicia recuperación de contraseña. | **JSON**: `{email, clientType}`<br>**Out**: `200 OK` |
+| `POST` | `/reset-password` | Restablece contraseña con token. | **In**: `ResetPasswordRequest`<br>**Out**: `ApiResponse` |
 
 👉 [Consulta la Especificación Completa de la API aquí](API_SPECIFICATION.md)
 
@@ -149,7 +179,22 @@ Endpoints principales del sistema de Autenticación. **Base URL**: `/api/auth`
 | `APP_FRONTEND_URL` | URL del cliente (ej. `http://localhost:4200`) para redirecciones. |
 | `APP_JWT_SECRET` | Clave secreta para firmar tokens. |
 | `APP_JWT_EXPIRATION_MS` | Duración Access Token (Default: 30 min). |
+| `APP_JWT_EXPIRATION_MS` | Duración Access Token (Default: 30 min). |
 | `APP_AUTH_VERIFICATION_EXPIRATION_HOURS` | Tiempo antes de purgar usuarios no verificados (Default: 48h). |
+
+### Configuración de URLs (application.properties)
+Ejemplo de configuración para soportar Web y Móvil:
+
+```properties
+# URLs Base Web
+app.frontend-url=http://localhost:4200
+app.urls.web.login=http://localhost:4200/login
+app.urls.web.reset=http://localhost:4200/reset-password
+
+# URLs Base Móvil (Deep Links)
+app.urls.mobile.login=mi-app://login
+app.urls.mobile.reset=mi-app://reset
+```
 
 ### Comandos de Ejecución
 

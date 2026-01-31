@@ -6,6 +6,8 @@ import com.krouser.backend.auth.dto.RegisterRequest;
 import com.krouser.backend.auth.dto.RegisterResponse;
 import com.krouser.backend.auth.dto.TokenRefreshRequest;
 import com.krouser.backend.auth.dto.TokenRefreshResponse;
+import com.krouser.backend.auth.dto.ResetPasswordRequest;
+import com.krouser.backend.auth.dto.ForgotPasswordRequest;
 import com.krouser.backend.auth.service.AuthService;
 import com.krouser.backend.shared.dto.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,6 +33,12 @@ public class AuthController {
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
+
+    @Value("${app.urls.web.login}")
+    private String webLoginUrl;
+
+    @Value("${app.urls.mobile.login}")
+    private String mobileLoginUrl;
 
     public AuthController(AuthService authService) {
         this.authService = authService;
@@ -59,8 +67,12 @@ public class AuthController {
             @RequestParam String token,
             Model model) {
         try {
-            authService.verifyAccount(token);
-            model.addAttribute("frontendUrl", frontendUrl);
+            String clientType = authService.verifyAccount(token);
+            String loginUrl = "mobile".equalsIgnoreCase(clientType) ? mobileLoginUrl : webLoginUrl;
+
+            // Use loginUrl instead of just frontendUrl for the button
+            model.addAttribute("loginUrl", loginUrl);
+            model.addAttribute("frontendUrl", frontendUrl); // Keep for fallback or other links if needed
             return "auth/verify-success";
         } catch (Exception e) {
             model.addAttribute("error", e.getMessage());
@@ -92,5 +104,24 @@ public class AuthController {
         String username = httpRequest.getUserPrincipal().getName();
         authService.logout(username);
         return ResponseEntity.ok(new ApiResponse<>(200, "Log out successful", null, httpRequest.getRequestURI()));
+    }
+
+    @PostMapping("/forgot-password")
+    @ResponseBody
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request,
+            HttpServletRequest httpRequest) {
+        authService.initiatePasswordReset(request.getEmail(),
+                request.getClientType() != null ? request.getClientType() : "web");
+        return ResponseEntity
+                .ok(new ApiResponse<>(200, "Password reset email sent", null, httpRequest.getRequestURI()));
+    }
+
+    @PostMapping("/reset-password")
+    @ResponseBody
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request,
+            HttpServletRequest httpRequest) {
+        authService.completePasswordReset(request.getToken(), request.getNewPassword());
+        return ResponseEntity
+                .ok(new ApiResponse<>(200, "Password has been reset successfully", null, httpRequest.getRequestURI()));
     }
 }

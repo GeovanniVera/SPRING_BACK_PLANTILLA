@@ -71,8 +71,11 @@ Endpoints relacionados con el registro, inicio de sesión y gestión de sesiones
   "nombre": "Juan",
   "segundoNombre": "Antonio",
   "apellidoPaterno": "Perez",
-  "apellidoMaterno": "Gomez"
+  "apellidoMaterno": "Gomez",
+  "clientType": "web"
 }
+```
+*   `clientType` (Opcional): "web" (default) o "mobile". Define el flujo de redirección.
 ```
 
 **Success Response (200 OK)** (`ApiResponse<RegisterResponse>`):
@@ -142,6 +145,67 @@ Endpoints relacionados con el registro, inicio de sesión y gestión de sesiones
   "timestamp": "..."
 }
 ```
+
+### `POST /api/auth/forgot-password`
+
+**Descripción**: Inicia el proceso de recuperación de contraseña enviando un correo con un token de reseteo. URL dinámica según el cliente.
+
+**Request Body** (`ForgotPasswordRequest`):
+```json
+{
+  "email": "usuario@example.com",
+  "clientType": "mobile"
+}
+```
+*   `clientType` (Opcional): "web" (default) o "mobile".
+
+**Success Response (200 OK)**:
+```json
+{
+  "status": 200,
+  "message": "Password reset email sent",
+  "data": null,
+  "path": "/api/auth/forgot-password",
+  "timestamp": "..."
+}
+```
+
+### `POST /api/auth/reset-password`
+
+**Descripción**: Restablece la contraseña utilizando un token válido.
+
+**Request Body** (`ResetPasswordRequest`):
+```json
+{
+  "token": "uuid-reset-token...",
+  "newPassword": "NewPassword123!"
+}
+```
+
+**Success Response (200 OK)**:
+```json
+{
+  "status": 200,
+  "message": "Password has been reset successfully",
+  "data": null,
+  "path": "/api/auth/reset-password",
+  "timestamp": "..."
+}
+```
+
+**Error Responses**:
+*   `400 Bad Request`: Token inválido/expirado o contraseña débil.
+*   **Ejemplo Token Expirado**:
+    ```json
+    {
+      "status": 400,
+      "error": "Bad Request",
+      "message": "Password reset token expired",
+      "details": null,
+      "path": "/api/auth/reset-password",
+      "timestamp": "..."
+    }
+    ```
 
 ---
 

@@ -46,13 +46,30 @@ public class AuthService {
     private final com.krouser.backend.email.service.EmailService emailService;
     private final com.krouser.backend.auth.repository.VerificationTokenRepository tokenRepository;
     private final RefreshTokenService refreshTokenService;
+    private final com.krouser.backend.auth.repository.PasswordResetTokenRepository passwordResetTokenRepository;
+
+    @org.springframework.beans.factory.annotation.Value("${app.frontend-url}")
+    private String frontendUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${app.urls.web.login}")
+    private String webLoginUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${app.urls.web.reset}")
+    private String webResetUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${app.urls.mobile.login}")
+    private String mobileLoginUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${app.urls.mobile.reset}")
+    private String mobileResetUrl;
 
     public AuthService(AuthenticationManager authenticationManager, UserDetailsService userDetailsService,
             JwtService jwtService, UserRepository userRepository, RoleRepository roleRepository,
             PasswordEncoder passwordEncoder, TagGenerator tagGenerator, AuditService auditService,
             com.krouser.backend.email.service.EmailService emailService,
             com.krouser.backend.auth.repository.VerificationTokenRepository tokenRepository,
-            RefreshTokenService refreshTokenService) {
+            RefreshTokenService refreshTokenService,
+            com.krouser.backend.auth.repository.PasswordResetTokenRepository passwordResetTokenRepository) {
         this.authenticationManager = authenticationManager;
         this.userDetailsService = userDetailsService;
         this.jwtService = jwtService;
@@ -64,12 +81,17 @@ public class AuthService {
         this.emailService = emailService;
         this.tokenRepository = tokenRepository;
         this.refreshTokenService = refreshTokenService;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
+        // Ideally we should validate that these URLs are configured or have defaults
     }
 
     /*
      * Account Verification
      */
-    public void verifyAccount(String token) {
+    /*
+     * Account Verification
+     */
+    public String verifyAccount(String token) {
         com.krouser.backend.auth.entity.VerificationToken verificationToken = tokenRepository.findByToken(token)
                 .orElseThrow(() -> new InvalidTokenException("Invalid token"));
 
@@ -81,10 +103,13 @@ public class AuthService {
         user.setStatus(com.krouser.backend.users.entity.UserStatus.ACTIVE);
         userRepository.save(user);
 
+        String clientType = verificationToken.getClientType();
         tokenRepository.delete(verificationToken);
 
         auditService.audit("AUTH_VERIFY_SUCCESS", "AUTH", AuditEvent.AuditOutcome.SUCCESS,
                 user.getIdPublic().toString(), user.getUsername(), "VerificationToken", null, null);
+
+        return clientType;
     }
 
     public LoginResponse login(LoginRequest request) {
@@ -232,7 +257,7 @@ public class AuthService {
                         .add("tag", savedUser.getTag())
                         .build());
 
-        sendVerificationEmail(savedUser);
+        sendVerificationEmail(savedUser, request.getClientType());
 
         return new RegisterResponse(
                 savedUser.getIdPublic(),
@@ -243,9 +268,9 @@ public class AuthService {
                 savedUser.getRoles().stream().map(Role::getName).collect(Collectors.toSet()));
     }
 
-    private void sendVerificationEmail(User user) {
+    private void sendVerificationEmail(User user, String clientType) {
         com.krouser.backend.auth.entity.VerificationToken token = new com.krouser.backend.auth.entity.VerificationToken(
-                user);
+                user, clientType);
         tokenRepository.save(token);
 
         String verificationLink = "http://localhost:8080/api/auth/verify?token=" + token.getToken();
@@ -295,9 +320,19 @@ public class AuthService {
         // Delete existing token if any
         tokenRepository.deleteByUser(user);
 
-        // Create new token
+        // We don't have clientType here specifically in the request usually, could be
+        // passed or default.
+        // For resend, we might want to default to 'web' or try to find previous if
+        // possible (but we just deleted it).
+        // Safest is default to 'web' or accept param. Since requirement says
+        // "Configuración Centralizada... Si no se envía un clientType... fallback
+        // seguro",
+        // we will use 'web' if not retrievable. Ideally the endpoint should accept it.
+        // For now, I'll default to 'web' in the constructor if I use the single arg
+        // one, OR explicitly pass "web".
+        // Actually, let's use the default constructor which sets it to "web".
         com.krouser.backend.auth.entity.VerificationToken newToken = new com.krouser.backend.auth.entity.VerificationToken(
-                user);
+                user, "web"); // defaulting to web for resend logic without explicit clientType
         tokenRepository.save(newToken);
 
         // Send email
@@ -308,6 +343,49 @@ public class AuthService {
                         .path("/api/auth/verify").queryParam("token", newToken.getToken()).toUriString());
 
         emailService.sendEmail(user.getUsername(), "Resend Verification", "welcome-email", variables);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public void initiatePasswordReset(String email, String clientType) {
+        User user = userRepository.findByUsername(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        // Build token
+        com.krouser.backend.auth.entity.PasswordResetToken token = new com.krouser.backend.auth.entity.PasswordResetToken(
+                user);
+        passwordResetTokenRepository.deleteByUser(user); // Ensure only one active token
+        passwordResetTokenRepository.save(token);
+
+        // Send email
+        String resetBaseUrl = "mobile".equalsIgnoreCase(clientType) ? mobileResetUrl : webResetUrl;
+        String resetLink = resetBaseUrl + "?token=" + token.getToken();
+
+        java.util.Map<String, Object> variables = new java.util.HashMap<>();
+        variables.put("username", user.getAlias()); // Or user.getUsername()
+        variables.put("resetLink", resetLink);
+
+        emailService.sendEmail(user.getUsername(), "Recuperar Contraseña", "password-reset", variables);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public void completePasswordReset(String token, String newPassword) {
+        validatePassword(newPassword);
+
+        com.krouser.backend.auth.entity.PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
+                .orElseThrow(() -> new InvalidTokenException("Invalid password reset token"));
+
+        if (resetToken.isExpired()) {
+            throw new InvalidTokenException("Password reset token expired");
+        }
+
+        User user = resetToken.getUser();
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        passwordResetTokenRepository.delete(resetToken);
+
+        auditService.audit("PASSWORD_RESET_SUCCESS", "AUTH", AuditEvent.AuditOutcome.SUCCESS,
+                user.getIdPublic().toString(), user.getUsername(), "User", null, null);
     }
 
     private void validatePassword(String password) {

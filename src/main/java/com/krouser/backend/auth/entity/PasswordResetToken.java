@@ -6,8 +6,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "verification_tokens")
-public class VerificationToken {
+@Table(name = "password_reset_tokens")
+public class PasswordResetToken {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,28 +23,13 @@ public class VerificationToken {
     @Column(nullable = false)
     private LocalDateTime expiryDate;
 
-    @Column(name = "client_type", nullable = false, columnDefinition = "VARCHAR(20) DEFAULT 'web'")
-    private String clientType = "web";
-
-    public VerificationToken() {
+    public PasswordResetToken() {
     }
 
-    public VerificationToken(User user) {
+    public PasswordResetToken(User user) {
         this.user = user;
         this.token = UUID.randomUUID().toString();
-        this.expiryDate = calculateExpiryDate(24 * 60); // 24 hours
-        this.clientType = "web";
-    }
-
-    public VerificationToken(User user, String clientType) {
-        this.user = user;
-        this.token = UUID.randomUUID().toString();
-        this.expiryDate = calculateExpiryDate(24 * 60); // 24 hours
-        this.clientType = (clientType != null && !clientType.isEmpty()) ? clientType : "web";
-    }
-
-    private LocalDateTime calculateExpiryDate(int expiryTimeInMinutes) {
-        return LocalDateTime.now().plusMinutes(expiryTimeInMinutes);
+        this.expiryDate = LocalDateTime.now().plusMinutes(15); // 15 minutes expiry
     }
 
     public Long getId() {
@@ -81,13 +66,5 @@ public class VerificationToken {
 
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiryDate);
-    }
-
-    public String getClientType() {
-        return clientType;
-    }
-
-    public void setClientType(String clientType) {
-        this.clientType = clientType;
     }
 }

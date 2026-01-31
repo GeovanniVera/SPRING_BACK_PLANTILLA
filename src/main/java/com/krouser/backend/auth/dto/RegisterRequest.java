@@ -28,6 +28,8 @@ public class RegisterRequest {
     @NotBlank(message = "El apellido materno es requerido")
     private String apellidoMaterno;
 
+    private String clientType = "web";
+
     public RegisterRequest() {
     }
 
@@ -40,6 +42,18 @@ public class RegisterRequest {
         this.segundoNombre = segundoNombre;
         this.apellidoPaterno = apellidoPaterno;
         this.apellidoMaterno = apellidoMaterno;
+    }
+
+    public RegisterRequest(String username, String password, String alias, String nombre, String segundoNombre,
+            String apellidoPaterno, String apellidoMaterno, String clientType) {
+        this.username = username;
+        this.password = password;
+        this.alias = alias;
+        this.nombre = nombre;
+        this.segundoNombre = segundoNombre;
+        this.apellidoPaterno = apellidoPaterno;
+        this.apellidoMaterno = apellidoMaterno;
+        this.clientType = clientType;
     }
 
     public String getUsername() {
@@ -96,5 +110,13 @@ public class RegisterRequest {
 
     public void setApellidoMaterno(String apellidoMaterno) {
         this.apellidoMaterno = apellidoMaterno;
+    }
+
+    public String getClientType() {
+        return clientType;
+    }
+
+    public void setClientType(String clientType) {
+        this.clientType = clientType;
     }
 }
