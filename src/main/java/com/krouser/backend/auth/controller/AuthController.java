@@ -24,12 +24,15 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.ui.Model;
 import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Controller
 @RequestMapping("/api/auth")
 public class AuthController {
 
     private final AuthService authService;
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
@@ -106,16 +109,19 @@ public class AuthController {
         return ResponseEntity.ok(new ApiResponse<>(200, "Log out successful", null, httpRequest.getRequestURI()));
     }
 
+    // Forgot Password
     @PostMapping("/forgot-password")
     @ResponseBody
     public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request,
             HttpServletRequest httpRequest) {
+        logger.info("Forgot password request received for email: {}", request.getEmail());
         authService.initiatePasswordReset(request.getEmail(),
                 request.getClientType() != null ? request.getClientType() : "web");
         return ResponseEntity
                 .ok(new ApiResponse<>(200, "Password reset email sent", null, httpRequest.getRequestURI()));
     }
 
+    // Reset Password
     @PostMapping("/reset-password")
     @ResponseBody
     public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request,

@@ -2,9 +2,9 @@ package com.krouser.backend.users.service;
 
 import com.krouser.backend.rbac.entity.Role;
 import com.krouser.backend.rbac.repository.RoleRepository;
-import com.krouser.backend.common.exception.BusinessException;
-import com.krouser.backend.common.exception.UserAlreadyExistsException;
-import com.krouser.backend.common.exception.UserNotFoundException;
+import com.krouser.backend.shared.exception.BusinessException;
+import com.krouser.backend.shared.exception.UserAlreadyExistsException;
+import com.krouser.backend.shared.exception.UserNotFoundException;
 import com.krouser.backend.shared.exception.ResourceNotFoundException;
 import com.krouser.backend.shared.util.TagGenerator;
 import com.krouser.backend.users.dto.CreateUserRequest;

@@ -1,4 +1,4 @@
-package com.krouser.backend.common.exception;
+package com.krouser.backend.shared.exception;
 
 import org.springframework.http.HttpStatus;
 
