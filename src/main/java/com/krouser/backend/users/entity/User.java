@@ -33,12 +33,14 @@ public class User {
     @Column(name = "lock_until")
     private java.time.LocalDateTime lockUntil;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
     private java.time.LocalDateTime createdAt;
 
     @PrePersist
     protected void onCreate() {
-        this.createdAt = java.time.LocalDateTime.now();
+        if (this.createdAt == null) {
+            this.createdAt = java.time.LocalDateTime.now();
+        }
     }
 
     @Column(nullable = false)

@@ -9,6 +9,12 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import com.krouser.backend.auth.dto.RegisterRequest;
 import com.krouser.backend.auth.dto.RegisterResponse;
+import com.krouser.backend.common.exception.AccountLockedException;
+import com.krouser.backend.common.exception.BusinessException;
+import com.krouser.backend.common.exception.InvalidTokenException;
+import com.krouser.backend.common.exception.UserAlreadyExistsException;
+import com.krouser.backend.common.exception.UserNotFoundException;
+import com.krouser.backend.common.exception.WeakPasswordException;
 import com.krouser.backend.rbac.entity.Role;
 import com.krouser.backend.rbac.repository.RoleRepository;
 import com.krouser.backend.users.entity.User;
@@ -65,10 +71,10 @@ public class AuthService {
      */
     public void verifyAccount(String token) {
         com.krouser.backend.auth.entity.VerificationToken verificationToken = tokenRepository.findByToken(token)
-                .orElseThrow(() -> new RuntimeException("Invalid token"));
+                .orElseThrow(() -> new InvalidTokenException("Invalid token"));
 
         if (verificationToken.isExpired()) {
-            throw new RuntimeException("Token expired");
+            throw new InvalidTokenException("Token expired");
         }
 
         User user = verificationToken.getUser();
@@ -84,14 +90,14 @@ public class AuthService {
     public LoginResponse login(LoginRequest request) {
         // 1. Check User Existence & Locking
         User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
 
         if (user.getStatus() == com.krouser.backend.users.entity.UserStatus.BLOCKED) {
             if (user.getLockUntil() != null && user.getLockUntil().isAfter(java.time.LocalDateTime.now())) {
                 auditService.audit("AUTH_LOGIN_LOCKED", "AUTH", AuditEvent.AuditOutcome.FAIL,
                         user.getIdPublic().toString(), request.getUsername(), "User", null,
                         new AuditDetailsBuilder().add("lockUntil", user.getLockUntil().toString()).build());
-                throw new RuntimeException("Account is locked until " + user.getLockUntil());
+                throw new AccountLockedException("Account is locked until " + user.getLockUntil());
             } else {
                 // Unlock if time passed
                 user.setStatus(com.krouser.backend.users.entity.UserStatus.ACTIVE);
@@ -165,11 +171,11 @@ public class AuthService {
         validatePassword(request.getPassword());
 
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new RuntimeException("Username already exists");
+            throw new UserAlreadyExistsException("Username already exists");
         }
 
         Role userRole = roleRepository.findByName("USER")
-                .orElseThrow(() -> new RuntimeException("Default role USER not found"));
+                .orElseThrow(() -> new BusinessException("Default role USER not found"));
 
         User user = new User();
         user.setUsername(request.getUsername());
@@ -213,7 +219,7 @@ public class AuthService {
         }
 
         if (!saved || savedUser == null) {
-            throw new RuntimeException("Could not generate unique tag after retries");
+            throw new BusinessException("Could not generate unique tag after retries");
         }
 
         auditService.audit("USER_REGISTER", "AUTH", AuditEvent.AuditOutcome.SUCCESS,
@@ -268,22 +274,22 @@ public class AuthService {
 
                     return new com.krouser.backend.auth.dto.TokenRefreshResponse(jwtToken, newToken.getToken());
                 })
-                .orElseThrow(() -> new RuntimeException("Refresh token is not in database!"));
+                .orElseThrow(() -> new InvalidTokenException("Refresh token is not in database!"));
     }
 
     public void logout(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
         refreshTokenService.deleteByUserId(user.getId());
     }
 
     @org.springframework.transaction.annotation.Transactional
     public void resendVerificationToken(String email) {
         User user = userRepository.findByUsername(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
 
         if (user.getStatus() != com.krouser.backend.users.entity.UserStatus.PENDING_VERIFICATION) {
-            throw new RuntimeException("Account is already verified or blocked.");
+            throw new BusinessException("Account is already verified or blocked.");
         }
 
         // Delete existing token if any
@@ -306,19 +312,19 @@ public class AuthService {
 
     private void validatePassword(String password) {
         if (password == null || password.length() < 12) {
-            throw new RuntimeException("La contraseña debe tener al menos 12 caracteres.");
+            throw new WeakPasswordException("La contraseña debe tener al menos 12 caracteres.");
         }
         if (!password.matches(".*[A-Z].*")) {
-            throw new RuntimeException("La contraseña debe contener al menos una letra mayúscula.");
+            throw new WeakPasswordException("La contraseña debe contener al menos una letra mayúscula.");
         }
         if (!password.matches(".*[a-z].*")) {
-            throw new RuntimeException("La contraseña debe contener al menos una letra minúscula.");
+            throw new WeakPasswordException("La contraseña debe contener al menos una letra minúscula.");
         }
         if (!password.matches(".*\\d.*")) {
-            throw new RuntimeException("La contraseña debe contener al menos un número.");
+            throw new WeakPasswordException("La contraseña debe contener al menos un número.");
         }
         if (!password.matches(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?].*")) {
-            throw new RuntimeException("La contraseña debe contener al menos un carácter especial.");
+            throw new WeakPasswordException("La contraseña debe contener al menos un carácter especial.");
         }
     }
 }

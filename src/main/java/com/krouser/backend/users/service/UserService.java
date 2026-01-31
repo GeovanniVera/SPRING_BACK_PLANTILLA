@@ -2,7 +2,9 @@ package com.krouser.backend.users.service;
 
 import com.krouser.backend.rbac.entity.Role;
 import com.krouser.backend.rbac.repository.RoleRepository;
-import com.krouser.backend.shared.exception.DuplicateResourceException;
+import com.krouser.backend.common.exception.BusinessException;
+import com.krouser.backend.common.exception.UserAlreadyExistsException;
+import com.krouser.backend.common.exception.UserNotFoundException;
 import com.krouser.backend.shared.exception.ResourceNotFoundException;
 import com.krouser.backend.shared.util.TagGenerator;
 import com.krouser.backend.users.dto.CreateUserRequest;
@@ -52,7 +54,7 @@ public class UserService {
     @Transactional
     public UserResponse createUser(CreateUserRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new DuplicateResourceException("User", request.getUsername());
+            throw new UserAlreadyExistsException("User already exists: " + request.getUsername());
         }
 
         Set<Role> roles = new HashSet<>();
@@ -101,7 +103,7 @@ public class UserService {
         }
 
         if (!saved || savedUser == null)
-            throw new RuntimeException("Could not generate unique tag");
+            throw new BusinessException("Could not generate unique tag");
 
         auditService.audit("USER_CREATED_ADMIN", "USER", AuditEvent.AuditOutcome.SUCCESS,
                 getCurrentUsername(), getCurrentUsername(),
@@ -116,20 +118,20 @@ public class UserService {
 
     public UserResponse getUserByUsername(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User", username));
+                .orElseThrow(() -> new UserNotFoundException("username", username));
         return new UserResponse(user);
     }
 
     public UserResponse getUserByIdPublic(UUID idPublic) {
         User user = userRepository.findByIdPublic(idPublic)
-                .orElseThrow(() -> new ResourceNotFoundException("User", idPublic.toString()));
+                .orElseThrow(() -> new UserNotFoundException("ID", idPublic.toString()));
         return new UserResponse(user);
     }
 
     @Transactional
     public UserResponse updateUser(UUID idPublic, UpdateUserRequest request) {
         User user = userRepository.findByIdPublic(idPublic)
-                .orElseThrow(() -> new ResourceNotFoundException("User", idPublic.toString()));
+                .orElseThrow(() -> new UserNotFoundException("ID", idPublic.toString()));
 
         if (request.getAlias() != null && !request.getAlias().equals(user.getAlias())) {
             // Update alias and tag logic if needed. For now just update alias, tag remains
@@ -159,7 +161,7 @@ public class UserService {
     @Transactional
     public void changeUserStatus(UUID idPublic, boolean enabled) {
         User user = userRepository.findByIdPublic(idPublic)
-                .orElseThrow(() -> new ResourceNotFoundException("User", idPublic.toString()));
+                .orElseThrow(() -> new UserNotFoundException("ID", idPublic.toString()));
         user.setStatus(enabled ? com.krouser.backend.users.entity.UserStatus.ACTIVE
                 : com.krouser.backend.users.entity.UserStatus.BLOCKED);
         userRepository.save(user);
@@ -172,7 +174,7 @@ public class UserService {
     @Transactional
     public void assignRolesToUser(UUID idPublic, List<String> roleNames) {
         User user = userRepository.findByIdPublic(idPublic)
-                .orElseThrow(() -> new ResourceNotFoundException("User", idPublic.toString()));
+                .orElseThrow(() -> new UserNotFoundException("ID", idPublic.toString()));
 
         Set<Role> roles = new HashSet<>();
         if (roleNames != null && !roleNames.isEmpty()) {

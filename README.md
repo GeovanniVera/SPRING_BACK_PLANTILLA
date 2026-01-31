@@ -86,6 +86,29 @@ El servicio `RbacBootstrapService` asegura que el entorno sea reproducible:
 *   Al iniciar, verifica si existen los roles `ROLE_ADMIN` y `ROLE_USER`.
 *   Si la base de datos está vacía, crea un usuario administrador por defecto.
 
+## ⚠️ Manejo de Errores y Excepciones
+
+El sistema cuenta con una arquitectura de manejo de errores centralizada y estandarizada:
+
+*   **GlobalExceptionHandler**: Un `@RestControllerAdvice` captura todas las excepciones (validación, seguridad, negocio) y las transforma en respuestas JSON uniformes.
+*   **Excepciones de Dominio**: Se utilizan excepciones semánticas propias del negocio en lugar de excepciones genéricas (`RuntimeException`):
+    *   `BusinessException` (Base)
+    *   `UserNotFoundException` (404)
+    *   `UserAlreadyExistsException` (409)
+    *   `WeakPasswordException` (400)
+    *   `AccountLockedException` (403)
+*   **Formato de Respuesta de Error**:
+    ```json
+    {
+      "status": 404,
+      "error": "Not Found",
+      "message": "User not found with username: test@example.com",
+      "details": null,
+      "path": "/api/users/test@example.com",
+      "timestamp": "..."
+    }
+    ```
+
 ## 🎨 Interfaz Visual (Backend Rendering)
 
 Endpoints que sirven HTML para interacción directa con el usuario final desde el correo:
@@ -107,8 +130,10 @@ Endpoints principales del sistema de Autenticación. **Base URL**: `/api/auth`
 | `POST` | `/register` | Registra usuario (Estado: PENDING). | **In**: `RegisterRequest`<br>**Out**: `ApiResponse<RegisterResponse>` |
 | `POST` | `/refresh` | Obtiene nuevo Access Token usando Refresh Token. | **In**: `TokenRefreshRequest`<br>**Out**: `TokenRefreshResponse` |
 | `POST` | `/logout` | Invalida la sesión (Borra Refresh Token). | *N/A* (Requiere Auth)<br>**Out**: `200 OK` |
-| `POST` | `/resend-verification` | Reenvía correo de activación. | **Query**: `?email=...`<br>**Out**: `200 OK` |
+| `POST` | `/resend-verification` | Reenvía correo de activación. | **Query**: `?email=...`<br>**Out**: `ApiResponse` |
 | `GET` | `/verify` | Valida token (Endpoint Visual). | **Query**: `?token=...`<br>**Out**: Vista HTML |
+
+👉 [Consulta la Especificación Completa de la API aquí](API_SPECIFICATION.md)
 
 ## 🐳 Ejecución con Docker
 
